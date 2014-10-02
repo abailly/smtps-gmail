@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TupleSections              #-}
 {-# OPTIONS -Wall                       #-}
 
 -- |
@@ -21,6 +22,7 @@ module Network.Mail.Client.Gmail (
 
 import Control.Exception (bracket)
 import Control.Monad.State
+import Control.Applicative
 import Crypto.Random.AESCtr (makeSystem)
 import Data.ByteString.Base64.Lazy (encode)
 import Data.ByteString.Lazy.Char8 (ByteString, fromStrict, lines, readFile, unpack)
@@ -63,15 +65,16 @@ sendGmail
    -> Strict.Text -- ^ subject
    -> Lazy.Text   -- ^ body
    -> [FilePath]  -- ^ attachments
+   -> Bool        -- ^ trace exchange to stderr
    -> IO ()
-sendGmail user pass from to cc bcc subject body attach =
+sendGmail user pass from to cc bcc subject body attach trace =
    bracket (connectTo "smtp.gmail.com" $ PortNumber 587) hClose $ \ hdl -> do
       sys   <- makeSystem
       ctx   <- contextNew hdl params sys
       hSetBuffering hdl LineBuffering
-      _ <- runSMTPState (exchangeSMTP hdl) []
+      _ <- runSMTPState (exchangeSMTP hdl) trace []
       handshake ctx
-      _ <- runSMTPState (exchangeSMTPS ctx) []
+      _ <- runSMTPState (exchangeSMTPS ctx) trace []
       bye ctx
       contextClose ctx
       where _USERNAME  = encode $ encodeUtf8 user
@@ -136,19 +139,24 @@ renderMail from to cc bcc subject body attach = do
    where headers = [("Subject",subject)]
 
 -- | STMP actions are stateful computations, stacked on top of the IO monad.
-newtype SMTPState a = S (StateT [ByteString] IO a)
+newtype SMTPState a = S (StateT ([ByteString], Bool) IO a)
     deriving ( Monad
-             , MonadState [ByteString]
+             , Functor
+             , Applicative
+             , MonadState ([ByteString], Bool)
              , MonadIO
              )
 
 -- | escape the SMTPState monad, back in the IO monad.
-runSMTPState :: SMTPState a -> [ByteString] -> IO (a, [ByteString])
-runSMTPState (S s) = runStateT s
+runSMTPState :: SMTPState a -> Bool -> [ByteString] -> IO (a, ([ByteString],Bool))
+runSMTPState (S s) trace = runStateT s . (,trace)
 
 -- | Send an unencrypted message using the simple message transfer protocol.
 sendSMTP :: Handle -> String -> SMTPState ()
-sendSMTP hdl xs = liftIO $ hPutStrLn hdl xs
+sendSMTP hdl xs = do
+  (_, trace) <- get
+  when trace $ liftIO (putStrLn $ "> " ++ xs)
+  liftIO $ hPutStrLn hdl xs
 
 -- | Receive a message using the simple message transfer protocol.
 recvSMTP :: Handle -> String -> SMTPState ()
@@ -156,7 +164,10 @@ recvSMTP hdl = recv (fromStrict `liftM` hGetLine hdl)
 
 -- | Send an encrypted message using the simple message transfer protocol.
 sendSMTPS :: Context -> ByteString -> SMTPState ()
-sendSMTPS ctx msg = sendData ctx $ msg <> "\r\n"
+sendSMTPS ctx msg = do
+  (_, trace) <- get
+  when trace $ liftIO (putStrLn $ "> " ++ show msg)
+  sendData ctx $ msg <> "\r\n"
 
 -- | Receive an encrypted message using the simple message transfer protocol.
 recvSMTPS :: Context -> String -> SMTPState ()
@@ -169,7 +180,7 @@ recvOptionalSMTPS ctx = recvOptional (fromStrict `liftM` recvData ctx)
 -- | Receive a SMTP message
 recv :: (IO ByteString) -> String -> SMTPState ()
 recv reply expected = do
-    s <- get
+    (s,trace) <- get
 
     -- ask for new data from the server only if there are no more data in the
     -- current state
@@ -178,17 +189,20 @@ recv reply expected = do
 
     -- process the first message line
     let (reply':newstate) = (s ++ lines xs)
+    let r = unpack reply'
+        
+    liftIO $ match expected r
 
-    liftIO $ match expected (unpack reply')
-
+    when trace $ liftIO $ putStrLn $ "< " ++ r
+    
     -- record the new state
-    put newstate
+    put (newstate,trace)
 
 -- | Similar to recv. In case of mismatch, do not fail and leave the current SMTPS state as is.
 recvOptional :: (IO ByteString) -> String -> SMTPState ()
 recvOptional reply code = do
     -- fetch the current state
-    s <- get
+    (s, trace) <- get
 
     -- ask for new data from the server only if there are no more data in the
     -- current state
@@ -197,9 +211,13 @@ recvOptional reply code = do
 
     -- process the first message line
     let (reply':newstate) = (s ++ lines xs)
+    let r = unpack reply'
+
+    when trace $ liftIO $ putStrLn $ "< " ++ r
+
     m <- liftIO $ match' code (unpack reply') (return True) (return False)
     case m of
-        True -> put newstate
+        True -> put (newstate,trace)
         False -> return () -- reply not processed, do not modify the SMTP state
 
 -- | Match reply codes and perform continuation, termination, and failure case analysis.
