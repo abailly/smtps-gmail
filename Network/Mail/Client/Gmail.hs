@@ -21,7 +21,6 @@ module Network.Mail.Client.Gmail (
 
      ) where
 
-import Control.Applicative ((<$>))
 import Control.Monad (forever, forM)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
