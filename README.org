@@ -1,4 +1,4 @@
-#+TITLE: Gmail SMTP Client
+#+TITLE: Gmail-Specific SMTP Client [[https://api.travis-ci.org/enzoh/smtps-gmail.svg?branch=master]]
 
 *** Introduction
 
@@ -24,9 +24,9 @@ Below is an example using ghci, where Alice sends
 an Excel spreadsheet to Bob using the SMTP client. 
 
 #+BEGIN_SRC haskell
->>> :set -XOverloadedStrings
->>> :module Network.Mail.Mime Network.Mail.Client.Gmail
->>> sendGmail "alice" "password" (Address (Just "Alice") "alice@gmail.com") [Address (Just "Bob") "bob@example.com"] [] [] "Excel Spreadsheet" "Hi Bob,\n\nThe Excel spreadsheet is attached.\n\nRegards,\n\nAlice" ["Spreadsheet.xls"] 10000000
+> :set -XOverloadedStrings
+> :module Network.Mail.Mime Network.Mail.Client.Gmail
+> sendGmail "alice" "password" (Address (Just "Alice") "alice@gmail.com") [Address (Just "Bob") "bob@example.com"] [] [] "Excel Spreadsheet" "Hi Bob,\n\nThe Excel spreadsheet is attached.\n\nRegards,\n\nAlice" ["Spreadsheet.xls"] 10000000
 #+END_SRC
 
 ** Resources
