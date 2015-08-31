@@ -1,5 +1,5 @@
 #+TITLE: Gmail-Specific SMTP Client
-Travis:[[https://travis-ci.org/enzoh/smtps-gmail][https://api.travis-ci.org/enzoh/smtps-gmail.svg?branch=master]] Hackage:[[https://hackage.haskell.org/package/smtps-gmail][https://img.shields.io/hackage/v/smtps-gmail.svg]] Dependencies:[[http://packdeps.haskellers.com/feed?needle=smtps-gmail][https://img.shields.io/hackage-deps/v/smtps-gmail.svg]]
+[[https://travis-ci.org/enzoh/smtps-gmail][https://api.travis-ci.org/enzoh/smtps-gmail.svg?branch=master]] [[https://hackage.haskell.org/package/smtps-gmail][https://img.shields.io/hackage/v/smtps-gmail.svg]] [[http://packdeps.haskellers.com/feed?needle=smtps-gmail][https://img.shields.io/hackage-deps/v/smtps-gmail.svg]]
 
 *** Introduction
 
