@@ -79,19 +79,20 @@ sendGmail
   -> L.Text     -- ^ body
   -> [FilePath] -- ^ attachments
   -> Int        -- ^ timeout (in microseconds)
+  -> L.Text     -- ^ client IP or FQDN
   -> IO ()
-sendGmail user pass from to cc bcc subject body attachments micros = do
+sendGmail user pass from to cc bcc subject body attachments micros client = do
   let handle = connectTo "smtp.gmail.com" $ PortNumber 587
   bracket handle hClose $ \ hdl -> do
     recvSMTP hdl micros "220"
-    sendSMTP hdl "EHLO"
+    sendSMTP hdl ehlo
     recvSMTP hdl micros "250"
     sendSMTP hdl "STARTTLS"
     recvSMTP hdl micros "220"
     let context = contextNew hdl params
     bracket context cClose $ \ ctx -> do
       handshake ctx
-      sendSMTPS ctx "EHLO"
+      sendSMTPS ctx ehlo
       recvSMTPS ctx micros "250"
       sendSMTPS ctx "AUTH LOGIN"
       recvSMTPS ctx micros "334"
@@ -111,6 +112,7 @@ sendGmail user pass from to cc bcc subject body attachments micros = do
       recvSMTPS ctx micros "221"
       where username  = encode $ encodeUtf8 user
             password  = encode $ encodeUtf8 pass
+            ehlo      = "EHLO " <> encodeUtf8 client
             sender    = "MAIL FROM: " <> angleBracket [from]
             recipient = "RCPT TO: "   <> angleBracket (to ++ cc ++ bcc)
             mail      = renderMail from to cc bcc subject body attachments
@@ -160,7 +162,9 @@ sendSMTP = L.hPutStrLn
 -- |
 -- Send an encrypted message.
 sendSMTPS :: Context -> L.ByteString -> IO ()
-sendSMTPS ctx msg = sendData ctx $ msg <> "\r\n"
+sendSMTPS ctx msg = sendData ctx sent
+  where
+    sent = msg <> "\r\n"
 
 -- |
 -- Receive an unencrypted.
